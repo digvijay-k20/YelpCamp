@@ -1,0 +1,10 @@
+<%layout('layouts/boilerplate')%>
+<div class="row">
+    <div class="col-6 offset-3">
+        <h4 class="alert-heading"><%=error.messages%></h4>
+        <% if(rocess.env.NODE_ENV != 'production') {%>
+            <p><%=err.stack %></p>
+        <% } %>
+    </div>
+
+</div>
