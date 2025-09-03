@@ -141,15 +141,29 @@ app.get('/fakeUser', async (req, res) => {
   res.send(newUser)
 })
 
-// ------------------- ERROR HANDLING -------------------
+// ------------------- ERROR HANDLING (FIXED) -------------------
 app.all('*', (req, res, next) => {
   next(new ExpressError('Page Not Found', 404))
 })
 
 app.use((err, req, res, next) => {
+  // Check if headers have already been sent to prevent multiple responses
+  if (res.headersSent) {
+    return next(err)
+  }
+
   const { status = 500 } = err
-  if (!err.message) err.message = 'Oh No, Something Went Wrong!'
-  res.status(status).send(err.message)
+  const message = err.message || 'Oh No, Something Went Wrong!'
+
+  // Set the status and render the error template
+  res.status(status).render('error', {
+    error: {
+      messages: message,
+      status: status,
+    },
+    err: err, // Pass the full error object for stack trace
+    isProduction: process.env.NODE_ENV === 'production',
+  })
 })
 
 // ------------------- SERVER START -------------------
