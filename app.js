@@ -1,6 +1,7 @@
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config()
 }
+console.log(process.env.SECRET)
 
 const express = require('express')
 const app = express()
@@ -13,31 +14,31 @@ const flash = require('connect-flash')
 const passport = require('passport')
 const LocalStrategy = require('passport-local')
 const mongoSanitize = require('express-mongo-sanitize')
-const helmet = require('helmet')
 const MongoStore = require('connect-mongo')
+const helmet = require('helmet')
 
 const Campground = require('./models/campground')
 const Review = require('./models/review')
 const User = require('./models/users')
-
+const catchAsync = require('./utils/CatchAsync')
 const ExpressError = require('./utils/ExpressError')
+const { campgroundSchema, reviewSchema } = require('./schemas.js')
+
 const campgroundRoutes = require('./routes/campground')
 const reviewRoutes = require('./routes/reviews')
 const userRoutes = require('./routes/users')
 
-// ------------------- DATABASE CONNECTION -------------------
+// MongoDB connection
 const dbUrl = process.env.DB_URL || 'mongodb://localhost:27017/yelp-camp'
 
 mongoose
   .connect(dbUrl)
-  .then(() => {
-    console.log('Database Connected')
-  })
-  .catch((err) => {
-    console.error('Database connection error:', err)
-  })
+  .then(() => console.log('Database Connected'))
+  .catch((err) => console.error('Mongo Connection Error:', err))
 
-// ------------------- MIDDLEWARE SETUP -------------------
+const db = mongoose.connection
+
+// Middleware & setup
 app.engine('ejs', ejsMate)
 app.set('view engine', 'ejs')
 app.set('views', path.join(__dirname, 'views'))
@@ -45,26 +46,26 @@ app.set('views', path.join(__dirname, 'views'))
 app.use(express.static(path.join(__dirname, 'public')))
 app.use(express.urlencoded({ extended: true }))
 app.use(methodOverride('_method'))
-app.use(mongoSanitize())
+app.use(mongoSanitize({ replaceWith: '_' }))
 
-// ------------------- SESSION SETUP -------------------
+// Session store setup
 const store = MongoStore.create({
   mongoUrl: dbUrl,
   touchAfter: 24 * 60 * 60,
   crypto: {
-    secret: process.env.SECRET || 'fallbackSecret',
+    secret: 'thisisDigvijaylaptop',
   },
 })
 
 const sessionConfig = {
   store,
-  secret: process.env.SECRET || 'fallbackSecret',
+  secret: 'thisisDigvijaylaptop',
   resave: false,
   saveUninitialized: true,
   cookie: {
     name: 'session',
     httpOnly: true,
-    expires: Date.now() + 1000 * 60 * 60 * 24 * 7, // 1 week
+    expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
     maxAge: 1000 * 60 * 60 * 24 * 7,
   },
 }
@@ -72,7 +73,7 @@ const sessionConfig = {
 app.use(session(sessionConfig))
 app.use(flash())
 
-// ------------------- HELMET CSP -------------------
+// Helmet CSP
 const scriptSrcUrls = [
   'https://stackpath.bootstrapcdn.com/',
   'https://kit.fontawesome.com/',
@@ -111,22 +112,22 @@ app.use(
   }),
 )
 
-// ------------------- PASSPORT AUTH -------------------
+// Passport setup
 app.use(passport.initialize())
 app.use(passport.session())
 passport.use(new LocalStrategy(User.authenticate()))
 passport.serializeUser(User.serializeUser())
 passport.deserializeUser(User.deserializeUser())
 
-// ------------------- FLASH MIDDLEWARE -------------------
+// Flash and currentUser for all views
 app.use((req, res, next) => {
-  res.locals.currentUser = req.user
+  res.locals.currentUser = req.user || null
   res.locals.success = req.flash('success')
   res.locals.error = req.flash('error')
   next()
 })
 
-// ------------------- ROUTES -------------------
+// Routes
 app.get('/', (req, res) => {
   res.render('home')
 })
@@ -135,38 +136,25 @@ app.use('/campgrounds', campgroundRoutes)
 app.use('/campgrounds/:id/reviews', reviewRoutes)
 app.use('/', userRoutes)
 
+// Fake user route for testing
 app.get('/fakeUser', async (req, res) => {
   const user = new User({ email: 'digvijay@gmail.com', username: 'Dk' })
   const newUser = await User.register(user, 'hello')
   res.send(newUser)
 })
 
-// ------------------- ERROR HANDLING (FIXED) -------------------
+// 404 handler
 app.all('*', (req, res, next) => {
   next(new ExpressError('Page Not Found', 404))
 })
 
+// Error handler
 app.use((err, req, res, next) => {
-  // Check if headers have already been sent to prevent multiple responses
-  if (res.headersSent) {
-    return next(err)
-  }
-
-  const { status = 500 } = err
-  const message = err.message || 'Oh No, Something Went Wrong!'
-
-  // Set the status and render the error template
-  res.status(status).render('error', {
-    error: {
-      messages: message,
-      status: status,
-    },
-    err: err, // Pass the full error object for stack trace
-    isProduction: process.env.NODE_ENV === 'production',
-  })
+  const { message = 'Something went wrong', status = 500 } = err
+  res.status(status).send(message)
 })
 
-// ------------------- SERVER START -------------------
+// Start server
 const port = process.env.PORT || 3000
 app.listen(port, () => {
   console.log(`Serving on port ${port}`)
