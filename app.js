@@ -150,8 +150,12 @@ app.all('*', (req, res, next) => {
 
 // Error handler
 app.use((err, req, res, next) => {
-  const { message = 'Something went wrong', status = 500 } = err
-  res.status(status).send(message)
+  if (res.headersSent) {
+    return next(err) // prevent double response
+  }
+  const { status = 500 } = err
+  if (!err.message) err.message = 'Something went wrong'
+  res.status(status).render('error', { err })
 })
 
 // Start server
