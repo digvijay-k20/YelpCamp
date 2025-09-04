@@ -60,7 +60,7 @@ const store = MongoStore.create({
 
 const sessionConfig = {
   store,
-  secret: process.env.SECRET || 'thisisfallback',,
+  secret: process.env.SECRET || 'thisisfallback',
   resave: false,
   saveUninitialized: true,
   cookie: {
